@@ -31,25 +31,13 @@ def get_drive_service():
 
 @st.cache_resource
 def get_system_spreadsheet():
-    folder_id = st.secrets["settings"]["folder_id"]
-    drive = get_drive_service()
-    results = drive.files().list(
-        q=f"name='بيانات_النظام' and '{folder_id}' in parents and trashed=false",
-        fields="files(id)",
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True
-    ).execute()
-    files = results.get('files', [])
-    if not files:
-        return None
-    return get_gspread_client().open_by_key(files[0]['id'])
+    file_id = st.secrets["files"]["system_file_id"]
+    return get_gspread_client().open_by_key(file_id)
 
 
 def _get_worksheet(tab_name):
-    ss = get_system_spreadsheet()
-    if ss is None:
-        return None
     try:
+        ss = get_system_spreadsheet()
         return ss.worksheet(tab_name)
     except Exception:
         return None
@@ -121,21 +109,23 @@ def log_action(action_type, target="", details=""):
 
 
 def list_sheets_in_folder():
-    folder_id = st.secrets["settings"]["folder_id"]
-    drive = get_drive_service()
+    """جلب ملفات الطلاب بناءً على المعرّفات مباشرة (بدون بحث في المجلد)"""
+    result = []
+    
+    # ملف الطلاب
     try:
-        results = drive.files().list(
-            q=f"'{folder_id}' in parents and trashed=false and mimeType='application/vnd.google-apps.spreadsheet'",
-            fields="files(id, name, modifiedTime)",
-            pageSize=100,
-            supportsAllDrives=True,
-            includeItemsFromAllDrives=True
-        ).execute()
-        files = results.get('files', [])
-        return [f for f in files if f['name'] != 'بيانات_النظام']
+        students_id = st.secrets["files"]["students_file_id"]
+        client = get_gspread_client()
+        sh = client.open_by_key(students_id)
+        result.append({
+            "id": students_id,
+            "name": sh.title,
+            "modifiedTime": ""
+        })
     except Exception as e:
-        st.error(f"خطأ: {e}")
-        return []
+        st.error(f"خطأ في فتح ملف الطلاب: {e}")
+    
+    return result
 
 
 def read_sheet_raw(file_id):
@@ -151,10 +141,7 @@ def read_sheet_raw(file_id):
 
 def delete_file_by_id(file_id):
     try:
-        get_drive_service().files().delete(
-            fileId=file_id,
-            supportsAllDrives=True
-        ).execute()
+        get_drive_service().files().delete(fileId=file_id).execute()
         return True
     except Exception as e:
         st.error(f"خطأ: {e}")
