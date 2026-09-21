@@ -1,7 +1,8 @@
 import streamlit as st
-from utils.auth import init_session, authenticate, create_default_admin
+from utils.auth import init_session, authenticate
 from utils.students import search_student
 from utils.statement import generate_student_statement_html, get_submission
+from utils.sheets import read_tab, list_sheets_in_folder, read_sheet_raw
 
 st.set_page_config(page_title="نظام تسليم الملفات", page_icon="📁", layout="wide")
 init_session()
@@ -31,11 +32,6 @@ st.markdown("""
     <p>كلية علوم الرياضة بنين - أبو قير</p>
 </div>
 """, unsafe_allow_html=True)
-
-try:
-    create_default_admin()
-except Exception:
-    pass
 
 tab1, tab2, tab3 = st.tabs(["🔍 استعلام طالب", "🖊️ دخول الموظفين", "🛠️ تشخيص (للمسؤول)"])
 
@@ -167,32 +163,51 @@ with tab3:
     st.markdown("### 🛠️ تشخيص النظام")
     st.caption("هذه الصفحة مخصصة للتحقق من قراءة البيانات من Google Sheets")
     
-    if st.button("🔍 فحص ورقة users", use_container_width=True):
+    st.markdown("#### 📁 فحص المجلد والملفات")
+    st.write(f"**Folder ID:** `{st.secrets['settings']['folder_id']}`")
+    st.write(f"**Service Account:** `{st.secrets['gcp_service_account']['client_email']}`")
+    
+    if st.button("🔍 فحص الملفات في المجلد", use_container_width=True, key="check_files"):
+        with st.spinner("جاري الفحص..."):
+            try:
+                files = list_sheets_in_folder()
+                if not files:
+                    st.error("❌ لم يتم العثور على أي ملفات Google Sheets في المجلد")
+                    st.warning("""
+                    **الحل:**
+                    1. افتح Google Drive → مجلد `نظام_تسليم_الملفات`.
+                    2. **شارك كل ملف على حدة** مع:
+                       `warnings-bot@data-air-509219-e0.iam.gserviceaccount.com`
+                    3. اجعله **Editor**.
+                    4. ارجع هنا واضغط الزر مرة أخرى.
+                    """)
+                else:
+                    st.success(f"✅ تم العثور على {len(files)} ملف")
+                    for f in files:
+                        st.write(f"• **{f['name']}** (`{f['id']}`)")
+            except Exception as e:
+                st.error(f"خطأ: {e}")
+    
+    st.markdown("---")
+    st.markdown("#### 👥 فحص ورقة users")
+    
+    if st.button("🔍 فحص ورقة users", use_container_width=True, key="check_users"):
         with st.spinner("جاري الفحص..."):
             users_df = read_tab("users")
-        
-        st.markdown("#### 📋 نتائج القراءة من Google Sheets:")
         
         if users_df.empty:
             st.error("❌ ورقة users فارغة أو غير موجودة")
         else:
             st.success(f"✅ تم قراءة {len(users_df)} صف")
-            
-            st.markdown("**أسماء الأعمدة المقروءة:**")
+            st.markdown("**أسماء الأعمدة:**")
             st.write(list(users_df.columns))
-            
-            st.markdown("**المحتوى الفعلي:**")
+            st.markdown("**المحتوى:**")
             st.dataframe(users_df, use_container_width=True)
-            
-            st.markdown("**اختبار المصادقة:**")
-            if "الإيميل" in users_df.columns:
-                for idx, row in users_df.iterrows():
-                    email = str(row.get("الإيميل", "")).strip()
-                    pwd = str(row.get("كلمة المرور", "")).strip()
-                    st.write(f"• `{email}` — كلمة المرور: `{pwd}`")
     
     st.markdown("---")
-    if st.button("🔍 فحص ملفات الطلاب", use_container_width=True):
+    st.markdown("#### 📄 فحص ملفات الطلاب")
+    
+    if st.button("🔍 فحص ملفات الطلاب", use_container_width=True, key="check_students"):
         from utils.students import load_all_students
         with st.spinner("جاري الفحص..."):
             students_df = load_all_students()
