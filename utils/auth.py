@@ -1,5 +1,20 @@
 import streamlit as st
+import bcrypt
 from utils.sheets import read_tab, append_row, update_row
+
+
+def hash_password(password):
+    """تشفير كلمة المرور باستخدام bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def verify_password(password, hashed):
+    """التحقق من كلمة المرور - يدعم المشفرة والعادية"""
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    except Exception:
+        # كلمة مرور غير مشفرة (plain text)
+        return password == hashed
 
 
 def init_session():
@@ -8,21 +23,7 @@ def init_session():
 
 
 def authenticate(email, password):
-    """المصادقة - مع دخول احتياطي ثابت"""
-    
-    # ===== دخول احتياطي ثابت (يعمل دائماً) =====
-    email_clean = str(email).strip().lower()
-    password_clean = str(password).strip()
-    
-    if email_clean == "admin@delivery.com" and password_clean == "admin123":
-        return {
-            "email": "admin@delivery.com",
-            "name": "مدير النظام",
-            "role": "مدير",
-            "signature": "مدير النظام"
-        }
-    
-    # ===== محاولة القراءة من Google Sheets =====
+    """المصادقة"""
     try:
         users_df = read_tab("users")
         
@@ -33,9 +34,10 @@ def authenticate(email, password):
         users_df.columns = [str(c).strip() for c in users_df.columns]
         
         # تنظيف الإيميل
-        users_df["الإيميل"] = users_df["الإيميل"].astype(str).str.strip().str.lower()
+        users_df["الإيميل"] = users_df["الإيميل"].astype(str).str.strip()
         
-        # البحث
+        # البحث عن المستخدم
+        email_clean = str(email).strip()
         user = users_df[users_df["الإيميل"] == email_clean]
         
         if user.empty:
@@ -43,8 +45,10 @@ def authenticate(email, password):
         
         row = user.iloc[0]
         stored_password = str(row["كلمة المرور"]).strip()
+        entered_password = str(password).strip()
         
-        if password_clean == stored_password:
+        # التحقق من كلمة المرور
+        if verify_password(entered_password, stored_password):
             return {
                 "email": email_clean,
                 "name": str(row["الاسم"]).strip(),
@@ -56,34 +60,32 @@ def authenticate(email, password):
         return None
 
 
-def create_default_admin():
-    pass
-
-
 def change_own_password(email, old_password, new_password):
-    if str(email).strip().lower() == "admin@delivery.com":
-        if str(old_password).strip() == "admin123":
-            st.session_state["admin_new_password"] = str(new_password).strip()
-            return {"success": True, "message": "✅ تم تغيير كلمة المرور (للجلسة الحالية)"}
-        return {"error": "❌ كلمة المرور الحالية غير صحيحة"}
-    
+    """تغيير كلمة المرور الخاصة"""
     try:
         users_df = read_tab("users")
         if users_df.empty:
             return {"error": "لا يوجد مستخدمون"}
+        
         users_df.columns = [str(c).strip() for c in users_df.columns]
         users_df["الإيميل"] = users_df["الإيميل"].astype(str).str.strip()
+        
         match = users_df[users_df["الإيميل"] == str(email).strip()]
         if match.empty:
             return {"error": "المستخدم غير موجود"}
+        
         row = match.iloc[0]
-        if str(old_password).strip() != str(row["كلمة المرور"]).strip():
+        stored_password = str(row["كلمة المرور"]).strip()
+        
+        if not verify_password(str(old_password).strip(), stored_password):
             return {"error": "❌ كلمة المرور الحالية غير صحيحة"}
+        
         if len(new_password) < 6:
             return {"error": "⚠️ كلمة المرور 6 أحرف على الأقل"}
+        
         real_row_num = match.index[0] + 2
         updated = row.to_dict()
-        updated["كلمة المرور"] = new_password
+        updated["كلمة المرور"] = hash_password(new_password)
         update_row("users", real_row_num, updated)
         return {"success": True, "message": "✅ تم تغيير كلمة المرور"}
     except Exception as e:
@@ -91,33 +93,39 @@ def change_own_password(email, old_password, new_password):
 
 
 def admin_reset_password(target_email, new_password):
+    """إعادة تعيين كلمة مرور مستخدم (للمدير)"""
     try:
         users_df = read_tab("users")
         if users_df.empty:
             return {"error": "لا يوجد مستخدمون"}
+        
         users_df.columns = [str(c).strip() for c in users_df.columns]
         users_df["الإيميل"] = users_df["الإيميل"].astype(str).str.strip()
+        
         match = users_df[users_df["الإيميل"] == str(target_email).strip()]
         if match.empty:
             return {"error": "المستخدم غير موجود"}
+        
         if len(new_password) < 6:
             return {"error": "⚠️ كلمة المرور 6 أحرف على الأقل"}
+        
         real_row_num = match.index[0] + 2
         updated = match.iloc[0].to_dict()
-        updated["كلمة المرور"] = new_password
+        updated["كلمة المرور"] = hash_password(new_password)
         update_row("users", real_row_num, updated)
         return {"success": True, "message": f"✅ تم التعيين لـ {target_email}"}
     except Exception as e:
         return {"error": f"خطأ: {e}"}
 
 
-def hash_password(password):
-    return password
-
-
 def is_admin():
     user = st.session_state.get("user")
     return user and user["role"] == "مدير"
+
+
+def is_supervisor():
+    user = st.session_state.get("user")
+    return user and user["role"] in ["مدير", "مشرف"]
 
 
 def is_staff():
