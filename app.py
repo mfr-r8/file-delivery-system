@@ -2,7 +2,7 @@ import streamlit as st
 from utils.auth import init_session, authenticate
 from utils.students import search_student
 from utils.statement import generate_student_statement_html, get_submission
-from utils.sheets import read_tab, list_sheets_in_folder
+from utils.sheets import read_tab
 
 st.set_page_config(page_title="نظام تسليم الملفات", page_icon="📁", layout="wide")
 init_session()
@@ -163,16 +163,50 @@ with tab3:
     st.markdown("### 🛠️ تشخيص النظام")
     st.caption("هذه الصفحة مخصصة للتحقق من قراءة البيانات من Google Sheets")
     
-    st.markdown("#### 📁 فحص الإعدادات")
+    st.markdown("#### 📁 الإعدادات")
     try:
         st.write(f"**Service Account:** `{st.secrets['gcp_service_account']['client_email']}`")
     except Exception as e:
         st.error(f"خطأ في قراءة Service Account: {e}")
     
     try:
-        st.write(f"**System File ID:** `{st.secrets['files']['system_file_id'][:20]}...`")
-        st.write(f"**Students File ID:** `{st.secrets['files']['students_file_id'][:20]}...`")
+        sys_id = st.secrets['files']['system_file_id']
+        stu_id = st.secrets['files']['students_file_id']
+        st.write(f"**System File ID:** `{sys_id[:25]}...`")
+        st.write(f"**Students File ID:** `{stu_id[:25]}...`")
     except Exception as e:
         st.error(f"⚠️ خطأ في قراءة معرّفات الملفات: {e}")
-        st.warning("""
-        **الحل**: تأكد من وجود قسم `[files]` في Secrets يحتوي على:
+        st.info("تأكد من وجود قسم [files] في Secrets يحتوي على system_file_id و students_file_id")
+    
+    st.markdown("---")
+    st.markdown("#### 👥 فحص ورقة users")
+    
+    if st.button("🔍 فحص ورقة users", use_container_width=True, key="check_users"):
+        with st.spinner("جاري الفحص..."):
+            users_df = read_tab("users")
+        
+        if users_df.empty:
+            st.error("❌ ورقة users فارغة أو غير موجودة")
+        else:
+            st.success(f"✅ تم قراءة {len(users_df)} صف")
+            st.markdown("**أسماء الأعمدة:**")
+            st.write(list(users_df.columns))
+            st.markdown("**المحتوى:**")
+            st.dataframe(users_df, use_container_width=True)
+    
+    st.markdown("---")
+    st.markdown("#### 📄 فحص ملفات الطلاب")
+    
+    if st.button("🔍 فحص ملفات الطلاب", use_container_width=True, key="check_students"):
+        from utils.students import load_all_students
+        with st.spinner("جاري الفحص..."):
+            students_df = load_all_students()
+        
+        if students_df.empty:
+            st.error("❌ لم يتم العثور على أي طالب")
+        else:
+            st.success(f"✅ تم قراءة {len(students_df)} طالب")
+            st.dataframe(students_df.head(20), use_container_width=True)
+
+st.markdown("---")
+st.markdown('<div style="text-align:center; color:#94a3b8; padding:15px; font-size:14px;">جميع الحقوق محفوظة © كلية علوم الرياضة بنين - أبو قير</div>', unsafe_allow_html=True)
