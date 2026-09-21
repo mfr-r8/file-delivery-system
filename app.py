@@ -37,8 +37,9 @@ try:
 except Exception:
     pass
 
-tab1, tab2 = st.tabs(["🔍 استعلام طالب", "🖊️ دخول الموظفين"])
+tab1, tab2, tab3 = st.tabs(["🔍 استعلام طالب", "🖊️ دخول الموظفين", "🛠️ تشخيص (للمسؤول)"])
 
+# ============ تبويب الطالب ============
 with tab1:
     st.markdown("### 🔍 أدخل رقمك القومي أو رقم جلوس الثانوية العامة")
     col1, col2 = st.columns([4, 1])
@@ -118,6 +119,7 @@ with tab1:
                         unsafe_allow_html=True
                     )
 
+# ============ تبويب الموظف ============
 with tab2:
     if st.session_state.get("user") is None:
         st.markdown("### 🔐 تسجيل دخول الموظفين")
@@ -159,6 +161,47 @@ with tab2:
         if st.button("🚪 تسجيل الخروج", use_container_width=True):
             st.session_state["user"] = None
             st.rerun()
+
+# ============ تبويب التشخيص ============
+with tab3:
+    st.markdown("### 🛠️ تشخيص النظام")
+    st.caption("هذه الصفحة مخصصة للتحقق من قراءة البيانات من Google Sheets")
+    
+    if st.button("🔍 فحص ورقة users", use_container_width=True):
+        with st.spinner("جاري الفحص..."):
+            users_df = read_tab("users")
+        
+        st.markdown("#### 📋 نتائج القراءة من Google Sheets:")
+        
+        if users_df.empty:
+            st.error("❌ ورقة users فارغة أو غير موجودة")
+        else:
+            st.success(f"✅ تم قراءة {len(users_df)} صف")
+            
+            st.markdown("**أسماء الأعمدة المقروءة:**")
+            st.write(list(users_df.columns))
+            
+            st.markdown("**المحتوى الفعلي:**")
+            st.dataframe(users_df, use_container_width=True)
+            
+            st.markdown("**اختبار المصادقة:**")
+            if "الإيميل" in users_df.columns:
+                for idx, row in users_df.iterrows():
+                    email = str(row.get("الإيميل", "")).strip()
+                    pwd = str(row.get("كلمة المرور", "")).strip()
+                    st.write(f"• `{email}` — كلمة المرور: `{pwd}`")
+    
+    st.markdown("---")
+    if st.button("🔍 فحص ملفات الطلاب", use_container_width=True):
+        from utils.students import load_all_students
+        with st.spinner("جاري الفحص..."):
+            students_df = load_all_students()
+        
+        if students_df.empty:
+            st.error("❌ لم يتم العثور على أي طالب")
+        else:
+            st.success(f"✅ تم قراءة {len(students_df)} طالب")
+            st.dataframe(students_df.head(20), use_container_width=True)
 
 st.markdown("---")
 st.markdown('<div style="text-align:center; color:#94a3b8; padding:15px; font-size:14px;">جميع الحقوق محفوظة © كلية علوم الرياضة بنين - أبو قير</div>', unsafe_allow_html=True)
