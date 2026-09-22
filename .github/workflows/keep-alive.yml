@@ -1,0 +1,23 @@
+name: Keep Streamlit App Alive
+
+on:
+  schedule:
+    # يعمل كل 10 دقائق
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit App
+        run: |
+          echo "🔄 Pinging app at $(date)"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://file-delivery-system-5ffogjxhwqjpjqniphq4ve.streamlit.app/)
+          echo "✅ Response Code: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ App is alive!"
+          else
+            echo "⚠️ App returned: $HTTP_CODE"
+          fi
+          echo "✅ Ping completed at $(date)"
