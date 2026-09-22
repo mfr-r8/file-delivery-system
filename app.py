@@ -1,4 +1,5 @@
 import streamlit as st
+import base64
 from utils.auth import init_session, authenticate
 from utils.students import search_student
 from utils.statement import generate_student_statement_html, get_submission
@@ -93,8 +94,9 @@ with tab1:
                 
                 html_content = generate_student_statement_html(student, submission)
                 
-                with st.expander("👁️ معاينة البيان"):
-                    st.components.v1.html(html_content, height=800, scrolling=True)
+                # ترميز Base64
+                b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
+                data_uri = f"data:text/html;base64,{b64_html}"
                 
                 c1, c2 = st.columns(2)
                 with c1:
@@ -107,12 +109,16 @@ with tab1:
                     )
                 with c2:
                     st.markdown(
-                        f'<a href="data:text/html;charset=utf-8,{html_content}" target="_blank" '
+                        f'<a href="{data_uri}" target="_blank" '
                         f'style="display:block; background:#2b7a62; color:white; padding:11px 20px; '
                         f'border-radius:8px; text-align:center; text-decoration:none; font-weight:bold;">'
                         f'🖨️ فتح للطباعة</a>',
                         unsafe_allow_html=True
                     )
+                
+                st.markdown("---")
+                st.markdown("### 👁️ معاينة البيان")
+                st.components.v1.html(html_content, height=800, scrolling=True)
 
 # ============ تبويب الموظف ============
 with tab2:
